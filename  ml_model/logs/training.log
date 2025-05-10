@@ -1,0 +1,10 @@
+2025-05-05 19:27:48,180 - INFO - Starting memory-optimized training pipeline
+2025-05-05 19:27:50,010 - INFO - Data loaded. Shape: (1091952, 31)
+2025-05-05 19:27:50,314 - ERROR - Pipeline failed: name 'joblib' is not defined
+2025-05-05 19:36:45,989 - INFO - Starting memory-optimized training pipeline
+2025-05-05 19:36:47,758 - INFO - Data loaded. Shape: (1091952, 31)
+2025-05-05 19:36:59,602 - INFO - Processed 100/120 machines
+2025-05-05 19:37:03,555 - INFO - Loaded 100/120 sequence files
+2025-05-05 19:37:04,432 - INFO - Final sequences loaded. X shape: (372101, 24, 28), y shape: (372101,)
+2025-05-05 20:20:53,698 - INFO - Model saved to model/lstm_maintenance_final.h5
+2025-05-05 20:20:53,698 - INFO - Training completed successfully

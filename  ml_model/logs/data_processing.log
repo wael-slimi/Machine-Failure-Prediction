@@ -1,0 +1,22 @@
+2025-05-01 00:36:16,683 - INFO - Starting 24-hour maintenance prediction data processing pipeline
+2025-05-01 00:36:16,765 - INFO - Loading data from database...
+2025-05-01 00:36:20,300 - INFO - Loaded 1048440 rows from sensor_data
+2025-05-01 00:36:20,350 - INFO - Loaded 120 rows from machines
+2025-05-01 00:36:20,484 - INFO - Loaded 9462 rows from maintenance_activity_logs
+2025-05-01 00:36:20,555 - INFO - Loaded 4731 rows from maintenance_tasks
+2025-05-01 00:36:20,641 - INFO - Loaded 10000 rows from environmental_info
+2025-05-01 00:36:20,886 - INFO - Loaded 87600 rows from machine_usage_history
+2025-05-01 00:36:20,886 - INFO - Sensor columns: ['sensor_id', 'machine_id', 'timestamp', 'temperature', 'vibration', 'load', 'cycle_time', 'power_consumption', 'error_code']
+2025-05-01 00:36:20,886 - INFO - Maintenance logs columns: ['maintenance_activity_log_id', 'activity_id', 'maintenance_task_id', 'date', 'log_details', 'active']
+2025-05-01 00:36:21,423 - INFO - Creating rolling features for temperature
+2025-05-01 00:36:21,423 - INFO - Creating rolling features for vibration
+2025-05-01 00:36:21,423 - WARNING - Sensor metric not found: pressure
+2025-05-01 00:36:21,423 - WARNING - Sensor metric not found: humidity
+2025-05-01 00:36:23,621 - INFO - Final processed dataframe shape: (1091952, 31)
+2025-05-01 00:36:23,640 - INFO - Class distribution:
+needs_maintenance
+0    0.874564
+1    0.125436
+Name: proportion, dtype: float64
+2025-05-01 00:36:27,279 - INFO - Saved correlation heatmap to feature_correlations.png
+2025-05-01 00:36:41,881 - INFO - Successfully saved processed data to processed_maintenance_prediction_data.csv

@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
-import NotificationTable from "@/components/notification-table"
+import NotificationWrapper from "@/components/notification-wrapper"
 import NavigationMenu from "@/components/navigation-menu"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Machine Monitoring System",
   description: "Real-time monitoring and predictive maintenance for industrial machines",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -21,14 +21,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light">
           <div className="min-h-screen bg-gray-50">
             <header className="bg-white border-b">
               <div className="container mx-auto p-4 flex justify-between items-center">
                 <h1 className="text-xl font-bold">Machine Monitoring System</h1>
-                <NotificationTable />
+                <NotificationWrapper />
               </div>
             </header>
             <NavigationMenu />

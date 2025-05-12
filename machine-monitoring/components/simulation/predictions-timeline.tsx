@@ -8,15 +8,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 export default function PredictionsTimeline({ machineId }: { machineId: number }) {
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const loadPredictions = async () => {
       try {
         setLoading(true)
+        setError(null)
         const data = await fetchPredictions(machineId)
-        setPredictions(data)
+        setPredictions(data || [])
       } catch (err) {
         console.error("Failed to load predictions", err)
+        setError(err instanceof Error ? err.message : "Failed to load predictions")
+        setPredictions([])
       } finally {
         setLoading(false)
       }
@@ -42,15 +46,19 @@ export default function PredictionsTimeline({ machineId }: { machineId: number }
     return "Normal"
   }
 
-  if (loading && predictions.length === 0) {
+  if (loading) {
     return <div className="text-center p-4">Loading predictions...</div>
+  }
+
+  if (error) {
+    return <div className="text-center p-4 text-red-500">Error: {error}</div>
   }
 
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">Failure probability for the next 24 time steps (hours)</p>
 
-      {predictions.length === 0 ? (
+      {!predictions || predictions.length === 0 ? (
         <div className="text-center p-4 border border-dashed rounded-md">Awaiting sensor data...</div>
       ) : (
         <TooltipProvider>

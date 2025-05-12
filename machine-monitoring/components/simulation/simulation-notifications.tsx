@@ -17,12 +17,18 @@ export default function SimulationNotifications({ machineId }: { machineId: numb
     }[]
   >([])
   const [muted, setMuted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
     const checkPredictions = async () => {
       try {
+        setError(null)
         const predictions = await fetchPredictions(machineId)
+        
+        if (!predictions || predictions.length === 0) {
+          return
+        }
 
         // Check for critical predictions (> 0.8)
         const criticalPredictions = predictions.filter((p) => p.prediction > 0.8)
@@ -109,12 +115,13 @@ export default function SimulationNotifications({ machineId }: { machineId: numb
             toast({
               title: "Warning",
               description: `${newNotification.message} - ${newNotification.details}`,
-              variant: "warning",
+              variant: "default"
             })
           }
         }
       } catch (err) {
         console.error("Failed to check predictions for notifications", err)
+        setError(err instanceof Error ? err.message : "Failed to check predictions")
       }
     }
 

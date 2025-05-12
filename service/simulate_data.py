@@ -49,13 +49,54 @@ def populate_machines_table():
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (machine_id) DO NOTHING
             """,
-            (machine_id, f"Machine {machine_id}", 1, 1, f"00:1B:44:11:3A:B{machine_id:02}", datetime.now().date(), True)
+            (machine_id, f"Machine {machine_id}", 1, 1, f"00:1B:44:11:3A:{machine_id:02X}", datetime.now().date(), True)
         )
     conn.commit()
     cursor.close()
     conn.close()
 
+def populate_machine_models_table():
+    """Ensure the machine_models table has valid entries."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Insert a default machine model with ID 1
+    cursor.execute(
+        """
+        INSERT INTO machine_models (machine_model_id, model, brand, machine_type_id, active)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (machine_model_id) DO NOTHING
+        """,
+        (1, "Model A", "Brand X", 1, "Y")
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def populate_boxes_table():
+    """Ensure the boxes table has valid entries."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Insert default box entries
+    for machine_id in range(1, 11):
+        cursor.execute(
+            """
+            INSERT INTO boxes (box_macaddress, box_label, enabled)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (box_macaddress) DO NOTHING
+            """,
+            (f"00:1B:44:11:3A:{machine_id:02X}", f"Box {machine_id}", True)
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 if __name__ == "__main__":
+    populate_machine_models_table()  # Populate machine_models table
+    populate_boxes_table()  # Populate boxes table
     populate_machines_table()  # Populate machines table
     while True:
         insert_sensor_data()

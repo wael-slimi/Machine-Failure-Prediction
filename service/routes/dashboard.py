@@ -1,50 +1,56 @@
 from flask import Blueprint, jsonify
+from datetime import date
 from utils.db import get_db_connection
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
+def format_machine_data(row, columns):
+    formatted = {}
+    type_map = {
+        'machine_id': int,
+        'machine_model_id': int,
+        'machine_type_id': int
+    }
+    for col, value in zip(columns, row):
+        if col in type_map:
+            formatted[col] = type_map[col](value)
+        elif isinstance(value, date):
+            formatted[col] = value.strftime('%Y-%m-%d')
+        else:
+            formatted[col] = value
+    return formatted
+
 @dashboard_bp.route('/machines', methods=['GET'])
-def get_machines_dashboard():
-    """Fetch all machine data with latest sensor readings for the dashboard."""
+def get_all_machines():
+    """Get all machines with proper CSV-style formatting"""
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Query to fetch machine details and latest sensor data
-        query = """
-        SELECT 
-            m.machine_id, 
-            m.machine_label, 
-            mm.model AS machine_model, 
-            mm.brand, 
-            b.box_macaddress,
-            m.installation_date, 
-            m.working AS is_active,
-            sd.temperature,
-            sd.vibration,
-            sd.load,
-            sd.error_code,
-            sd.timestamp AS last_reading_time
-        FROM machines m
-        JOIN machine_models mm ON m.machine_model_id = mm.machine_model_id
-        JOIN boxes b ON m.box_macaddress = b.box_macaddress
-        LEFT JOIN (
-            SELECT DISTINCT ON (machine_id) *
-            FROM sensor_data
-            ORDER BY machine_id, timestamp DESC
-        ) sd ON m.machine_id = sd.machine_id
-        ORDER BY m.machine_id;
-        """
-        cursor.execute(query)
-        rows = cursor.fetchall()
+        cursor.execute("""
+            SELECT 
+                machine_id,
+                machine_label,
+                machine_model_id,
+                machine_type_id,
+                box_macaddress::text,  -- Convert macaddr to string
+                installation_date,
+                working
+            FROM machines
+            ORDER BY machine_id
+        """)
         
-        # Convert rows to list of dictionaries
         columns = [desc[0] for desc in cursor.description]
-        machines = [dict(zip(columns, row)) for row in rows]
+        machines = [format_machine_data(row, columns) for row in cursor.fetchall()]
 
-        cursor.close()
-        conn.close()
+        return jsonify({"machines": machines})
 
-        return jsonify(machines)
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

@@ -19,9 +19,21 @@ export default function MachineGrid() {
       try {
         setLoading(true)
         const data = await fetchMachines()
-        setMachines(data)
-        setError(null)
+        console.log('Machines data in grid:', data) // Debug log
+        if (data && data.machines) {
+          setMachines(data.machines)
+          setError(null)
+        } else {
+          console.error('Invalid machines data format in grid:', data)
+          setError("Invalid data format received from server.")
+          toast({
+            title: "Error",
+            description: "Invalid data format received from server.",
+            variant: "destructive",
+          })
+        }
       } catch (err) {
+        console.error('Error loading machines in grid:', err)
         setError("Failed to load machines. Please try again.")
         toast({
           title: "Error",
@@ -78,8 +90,8 @@ export default function MachineGrid() {
             <TableCell>{machine.machine_label}</TableCell>
             <TableCell>{machine.installation_date}</TableCell>
             <TableCell>
-              <Badge variant={machine.is_active ? "success" : "secondary"}>
-                {machine.is_active ? "Active" : "Inactive"}
+              <Badge variant={machine.working ? "success" : "secondary"}>
+                {machine.working ? "Active" : "Inactive"}
               </Badge>
             </TableCell>
             <TableCell>

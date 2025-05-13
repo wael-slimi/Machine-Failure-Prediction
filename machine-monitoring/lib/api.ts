@@ -1,7 +1,7 @@
-import type { Machine, SensorData, Prediction } from "./types"
+import type { SensorData, Prediction } from "./types"
 
 // Base API URL - would typically come from environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = 'http://localhost:5000/api';  // Updated to include /api prefix
 
 // Maximum number of retries for failed requests
 const MAX_RETRIES = 3
@@ -61,9 +61,24 @@ interface SensorDataResponse {
   latest_update: string
 }
 
-// API functions
-export async function fetchMachines(): Promise<Machine[]> {
-  return apiRequest<Machine[]>('/dashboard/machines')
+// Add MachinesResponse interface
+export interface MachinesResponse {
+  machines: Machine[];
+}
+
+export interface Machine {
+  machine_id: number;
+  machine_label: string;
+  machine_model_id: number;
+  machine_type_id: number;
+  box_macaddress: string;
+  installation_date: string;
+  working: boolean;
+}
+
+// Updated API functions
+export async function fetchMachines(): Promise<MachinesResponse> {
+  return apiRequest<MachinesResponse>('/dashboard/machines')
 }
 
 export async function fetchMachineById(machineId: number): Promise<Machine> {
@@ -71,20 +86,26 @@ export async function fetchMachineById(machineId: number): Promise<Machine> {
 }
 
 export async function fetchSensorData(machineId: number): Promise<SensorData[]> {
-  // The backend now returns the array directly
   return apiRequest<SensorData[]>(`/simulation/data/${machineId}`)
 }
 
-export async function fetchPredictions(machineId: number): Promise<Prediction[]> {
-  const response = await apiRequest<{ predictions: Prediction[] }>('/simulation/simulate', {
-    method: 'POST',
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
-    body: JSON.stringify({ machine_id: machineId }),
-  })
-  return response.predictions
+export async function getPredictions(): Promise<Prediction[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/simulation/simulate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to get predictions');
+    }
+    const data: Prediction[] = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error getting predictions:', error);
+    throw error;
+  }
 }
 
 // Export the API object
@@ -92,5 +113,5 @@ export const api = {
   getMachines: fetchMachines,
   getMachineById: fetchMachineById,
   getSensorData: fetchSensorData,
-  runSimulation: (machineId: number = 5000) => fetchPredictions(machineId),
+  runSimulation: getPredictions,
 }

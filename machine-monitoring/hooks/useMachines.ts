@@ -10,8 +10,12 @@ export function useMachines() {
     const fetchMachines = async () => {
       try {
         const data = await api.getMachines();
-        setMachines(data);
-        setError(null);
+        if (data && data.machines) {
+          setMachines(data.machines);
+          setError(null);
+        } else {
+          setError('Invalid data format received from server');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch machines');
       } finally {

@@ -7,6 +7,7 @@ export interface Machine {
   box_macaddress: string
   installation_date: string
   working: boolean
+  is_active?: boolean // Optional property for UI state
 }
 
 // Real-time sensor data

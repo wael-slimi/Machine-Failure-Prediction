@@ -22,11 +22,14 @@ export default function SimulationPage() {
       try {
         setLoading(true)
         const data = await fetchMachines()
-        setMachines(data)
+        setMachines(data.machines)
 
-        // Default to first machine
-        if (data.length > 0) {
-          setSelectedMachine(data[0])
+        // Set machine ID 5000 as default
+        const machine5000 = data.machines.find(m => m.machine_id === 5000)
+        if (machine5000) {
+          setSelectedMachine(machine5000)
+        } else if (data.machines.length > 0) {
+          setSelectedMachine(data.machines[0])
         }
       } catch (err) {
         console.error("Failed to load machines", err)

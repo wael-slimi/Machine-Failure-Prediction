@@ -1,186 +1,152 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { fetchPredictions } from "@/lib/api"
-import { AlertTriangle, AlertCircle } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { addGlobalNotification } from "@/components/notification-table"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useRef } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { api } from "@/lib/api"
+import type { Prediction } from "@/lib/types"
+
+interface Notification {
+  id: number
+  timestamp: string
+  message: string
+  severity: "warning" | "error" | "info"
+}
 
 export default function SimulationNotifications({ machineId }: { machineId: number }) {
-  const [notifications, setNotifications] = useState<
-    {
-      type: "warning" | "critical"
-      message: string
-      timestamp: Date
-      details: string
-    }[]
-  >([])
-  const [muted, setMuted] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { toast } = useToast()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [currentTimestamp, setCurrentTimestamp] = useState<string | null>(null)
+  const simulationInterval = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const checkPredictions = async () => {
-      try {
-        setError(null)
-        const predictions = await fetchPredictions(machineId)
-        
-        if (!predictions || predictions.length === 0) {
-          return
-        }
-
-        // Check for critical predictions (> 0.8)
-        const criticalPredictions = predictions.filter((p) => p.prediction > 0.8)
-        if (criticalPredictions.length > 0) {
-          // Find the highest prediction
-          const highestPrediction = criticalPredictions.reduce(
-            (max, p) => (p.prediction > max.prediction ? p : max),
-            criticalPredictions[0],
-          )
-
-          const index = predictions.indexOf(highestPrediction)
-          const timeStep = index + 1
-
-          const newNotification = {
-            type: "critical" as const,
-            message: `Critical alert: High failure probability detected`,
-            details: `Prediction score: ${(highestPrediction.prediction * 100).toFixed(0)}% at hour ${timeStep}`,
-            timestamp: new Date(),
-          }
-
-          setNotifications((prev) => {
-            // Check if we already have this notification
-            const exists = prev.some(
-              (n) => n.message === newNotification.message && n.details === newNotification.details,
-            )
-            if (exists) return prev
-            return [newNotification, ...prev].slice(0, 10)
-          })
-
-          // Add to global notifications
-          addGlobalNotification({
-            machineId,
-            type: "critical",
-            message: `${newNotification.message} - ${newNotification.details}`,
-            timestamp: new Date(),
-          })
-
-          if (!muted) {
-            toast({
-              title: "Critical Alert",
-              description: `${newNotification.message} - ${newNotification.details}`,
-              variant: "destructive",
-            })
-          }
-        }
-
-        // Check for warning predictions (> 0.5)
-        const warningPredictions = predictions.filter((p) => p.prediction > 0.5 && p.prediction <= 0.8)
-        if (warningPredictions.length > 0) {
-          // Find the highest prediction
-          const highestPrediction = warningPredictions.reduce(
-            (max, p) => (p.prediction > max.prediction ? p : max),
-            warningPredictions[0],
-          )
-
-          const index = predictions.indexOf(highestPrediction)
-          const timeStep = index + 1
-
-          const newNotification = {
-            type: "warning" as const,
-            message: `Warning: Elevated failure probability`,
-            details: `Prediction score: ${(highestPrediction.prediction * 100).toFixed(0)}% at hour ${timeStep}`,
-            timestamp: new Date(),
-          }
-
-          setNotifications((prev) => {
-            // Check if we already have this notification
-            const exists = prev.some(
-              (n) => n.message === newNotification.message && n.details === newNotification.details,
-            )
-            if (exists) return prev
-            return [newNotification, ...prev].slice(0, 10)
-          })
-
-          // Add to global notifications
-          addGlobalNotification({
-            machineId,
-            type: "warning",
-            message: `${newNotification.message} - ${newNotification.details}`,
-            timestamp: new Date(),
-          })
-
-          if (!muted) {
-            toast({
-              title: "Warning",
-              description: `${newNotification.message} - ${newNotification.details}`,
-              variant: "default"
-            })
-          }
-        }
-      } catch (err) {
-        console.error("Failed to check predictions for notifications", err)
-        setError(err instanceof Error ? err.message : "Failed to check predictions")
+    return () => {
+      if (simulationInterval.current) {
+        clearInterval(simulationInterval.current)
       }
     }
+  }, [])
 
-    checkPredictions()
+  const startSimulation = async () => {
+    try {
+      setIsSimulating(true)
+      // Reset simulation
+      await fetch("http://localhost:5000/api/simulation/reset", {
+        method: "POST",
+      })
 
-    // Check for new notifications every 30 seconds
-    const interval = setInterval(checkPredictions, 30000)
+      // Start simulation loop
+      simulationInterval.current = setInterval(async () => {
+        try {
+          const response = await fetch("http://localhost:5000/api/simulation/simulate", {
+            method: "POST",
+          })
+          const data = await response.json()
 
-    return () => clearInterval(interval)
-  }, [machineId, toast, muted])
+          if (data.status === "complete") {
+            stopSimulation()
+            return
+          }
 
-  const toggleMute = () => {
-    setMuted(!muted)
-    toast({
-      title: muted ? "Notifications Enabled" : "Notifications Muted",
-      description: muted ? "You will now receive toast notifications" : "Toast notifications have been muted",
-    })
+          setCurrentTimestamp(data.timestamp)
+
+          // Check prediction and add notification if needed
+          const prediction = data.prediction.prediction
+          if (prediction > 0.8) {
+            addNotification({
+              id: Date.now(),
+              timestamp: data.timestamp,
+              message: `High probability of maintenance needed (${(prediction * 100).toFixed(1)}%)`,
+              severity: "error"
+            })
+          } else if (prediction > 0.5) {
+            addNotification({
+              id: Date.now(),
+              timestamp: data.timestamp,
+              message: `Moderate probability of maintenance needed (${(prediction * 100).toFixed(1)}%)`,
+              severity: "warning"
+            })
+          }
+        } catch (error) {
+          console.error("Simulation error:", error)
+          stopSimulation()
+        }
+      }, 1000) // Run every second
+    } catch (error) {
+      console.error("Failed to start simulation:", error)
+      setIsSimulating(false)
+    }
   }
 
-  const clearNotifications = () => {
-    setNotifications([])
+  const stopSimulation = () => {
+    if (simulationInterval.current) {
+      clearInterval(simulationInterval.current)
+      simulationInterval.current = null
+    }
+    setIsSimulating(false)
+  }
+
+  const addNotification = (notification: Notification) => {
+    setNotifications(prev => [notification, ...prev].slice(0, 10)) // Keep last 10 notifications
+  }
+
+  const getSeverityColor = (severity: Notification["severity"]) => {
+    switch (severity) {
+      case "error":
+        return "bg-red-500"
+      case "warning":
+        return "bg-yellow-500"
+      case "info":
+        return "bg-blue-500"
+    }
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <p className="text-sm text-muted-foreground">Alerts based on prediction scores</p>
-        <Button variant="outline" size="sm" onClick={toggleMute} className="flex items-center gap-1">
-          {muted ? "Unmute" : "Mute"}
-        </Button>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          {currentTimestamp && (
+            <p className="text-sm text-gray-500">
+              Current Time: {new Date(currentTimestamp).toLocaleString()}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={isSimulating ? stopSimulation : startSimulation}
+          className={`px-4 py-2 rounded-md ${
+            isSimulating
+              ? "bg-red-500 hover:bg-red-600"
+              : "bg-green-500 hover:bg-green-600"
+          } text-white`}
+        >
+          {isSimulating ? "Stop Simulation" : "Start Simulation"}
+        </button>
       </div>
 
-      {notifications.length === 0 ? (
-        <div className="text-center p-4 border border-dashed rounded-md text-muted-foreground">
-          No alerts at this time
-        </div>
-      ) : (
-        <div className="space-y-3 max-h-[300px] overflow-y-auto">
-          {notifications.map((notification, index) => (
+      <div className="space-y-2">
+        {notifications.length === 0 ? (
+          <p className="text-center text-gray-500">No notifications yet</p>
+        ) : (
+          notifications.map((notification) => (
             <div
-              key={index}
-              className={`p-3 rounded-md flex items-start gap-3 ${
-                notification.type === "critical" ? "bg-red-50 text-red-800" : "bg-orange-50 text-orange-800"
-              }`}
+              key={notification.id}
+              className="p-3 rounded-lg border border-gray-200"
             >
-              {notification.type === "critical" ? (
-                <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-              )}
-              <div>
-                <div className="font-medium">{notification.message}</div>
-                <div className="text-sm mt-1">{notification.details}</div>
-                <div className="text-xs mt-1">{notification.timestamp.toLocaleTimeString()}</div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium">{notification.message}</p>
+                  <p className="text-sm text-gray-500">
+                    {new Date(notification.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                <Badge className={getSeverityColor(notification.severity)}>
+                  {notification.severity}
+                </Badge>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   )
 }

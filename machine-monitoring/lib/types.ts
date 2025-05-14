@@ -23,25 +23,34 @@ export interface SensorData {
   temperature_external: number
   power_fluctuation: number
   working_hours: number
-  error_code: number
+  error_code: number | null
   experience_years: number
   shift: number
   session_start: number
   session_end: number
-  maintenance_status: number
+  maintenance_status_id: number
   maintenance_duration: number
   interaction_count: number
-  recent_changes: number
+  recent_changes: string
   machine_type: number
-  machine_model: number
-  brand: number
-  installation_date: number
-  active: number
+  machine_model: string
+  brand: string
+  installation_date: string
+  active: boolean
   environment_id: number
   session_id: number
   interaction_id: number
   maintenance_task_id: number
   maintenance_template_id: number
+}
+
+// Streaming sensor data (simplified version)
+export interface StreamingSensorData {
+  timestamp: string
+  temperature: number
+  vibration: number
+  load: number
+  power_consumption: number
 }
 
 // AI prediction

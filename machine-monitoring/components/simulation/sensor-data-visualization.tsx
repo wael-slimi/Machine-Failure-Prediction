@@ -14,8 +14,7 @@ import {
   Legend,
   type ChartData,
 } from "chart.js"
-import { fetchSensorData } from "@/lib/api"
-import type { SensorData } from "@/lib/types"
+import type { StreamingSensorData } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
@@ -23,117 +22,55 @@ import { Badge } from "@/components/ui/badge"
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
 export default function SensorDataVisualization({ machineId }: { machineId: number }) {
-  const [sensorData, setSensorData] = useState<SensorData[]>([])
+  const [sensorData, setSensorData] = useState<StreamingSensorData[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [currentValues, setCurrentValues] = useState<SensorData | null>(null)
-  const pollingInterval = useRef<NodeJS.Timeout | null>(null)
+  const [currentValues, setCurrentValues] = useState<StreamingSensorData | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
 
-  // Setup data polling
+  // Setup SSE connection
   useEffect(() => {
-    let isMounted = true;
+    const eventSource = new EventSource(`http://localhost:5000/api/simulation/sensor-stream/${machineId}`)
+    eventSourceRef.current = eventSource
 
-    const pollData = async () => {
-      if (!isMounted) return;
-
+    eventSource.onmessage = (event) => {
       try {
-        setError(null)
-        console.log("[SensorDataVisualization] Fetching data for machine:", machineId)
-        const data = await fetchSensorData(machineId)
-        console.log("[SensorDataVisualization] Received data:", JSON.stringify(data, null, 2))
-        
-        if (!isMounted) return;
-        
-        if (!Array.isArray(data)) {
-          console.error("[SensorDataVisualization] Invalid data format:", data)
-          setError("Invalid data format received from server")
-          return
-        }
-        
-        if (data.length === 0) {
-          console.log("[SensorDataVisualization] No data available")
-          setSensorData([])
-          setCurrentValues(null)
-          setLoading(false)
+        const data = JSON.parse(event.data)
+        if (data.error) {
+          console.error("Error in sensor data stream:", data.error)
           return
         }
 
-        // Validate data structure
-        const isValidData = data.every(item => {
-          const hasRequiredFields = 
-            typeof item === 'object' && 
-            item !== null &&
-            'machine_id' in item &&
-            'timestamp' in item &&
-            'temperature' in item &&
-            'vibration' in item &&
-            'load' in item &&
-            'power_consumption' in item;
-          
-          if (!hasRequiredFields) {
-            console.error("[SensorDataVisualization] Invalid data point:", item)
-          }
-          return hasRequiredFields;
-        });
-
-        if (!isValidData) {
-          console.error("[SensorDataVisualization] Data validation failed")
-          setError("Invalid data structure received from server")
-          return;
+        const newDataPoint: StreamingSensorData = {
+          timestamp: data.timestamp,
+          temperature: data.temperature,
+          vibration: data.vibration,
+          load: data.load,
+          power_consumption: data.power_consumption,
         }
-        
-        // Handle the array of data points from the API
+
         setSensorData((prev) => {
-          const newData = [...prev, ...data].sort((a, b) => 
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          );
-          console.log("[SensorDataVisualization] Sorted data:", newData.map(d => ({
-            timestamp: d.timestamp,
-            vibration: d.vibration
-          })));
-          return newData.slice(0, 20);
+          const newData = [...prev, newDataPoint]
+          if (newData.length > 20) {
+            return newData.slice(newData.length - 20)
+          }
+          return newData
         })
-        
-        // Set current values to the latest data point
-        if (data.length > 0) {
-          const latestData = data[0];
-          console.log("[SensorDataVisualization] Setting current values:", {
-            timestamp: latestData.timestamp,
-            vibration: latestData.vibration,
-            temperature: latestData.temperature,
-            load: latestData.load,
-            power_consumption: latestData.power_consumption
-          });
-          setCurrentValues(latestData)
-        }
+        setCurrentValues(newDataPoint)
         setLoading(false)
       } catch (err) {
-        if (!isMounted) return;
-        
-        console.error("[SensorDataVisualization] Error:", err)
-        if (err instanceof Error) {
-          console.error("[SensorDataVisualization] Error details:", {
-            name: err.name,
-            message: err.message,
-            stack: err.stack
-          })
-        }
-        setError(err instanceof Error ? err.message : "Failed to fetch sensor data")
-        setLoading(false)
+        console.error("Failed to parse sensor data", err)
       }
     }
 
-    // Initial fetch
-    pollData()
-
-    // Setup polling every 5 seconds
-    pollingInterval.current = setInterval(pollData, 5000)
+    eventSource.onerror = (err) => {
+      console.error("EventSource failed:", err)
+      eventSource.close()
+    }
 
     // Cleanup on unmount
     return () => {
-      isMounted = false;
-      if (pollingInterval.current) {
-        clearInterval(pollingInterval.current)
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
       }
     }
   }, [machineId])
@@ -174,22 +111,15 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
     },
   }
 
-  // Prepare chart data with safe defaults
+  // Prepare chart data
   const labels = sensorData.map((_, index) => `T-${sensorData.length - index}`)
-
-  const prepareChartData = (data: SensorData[], key: keyof SensorData, defaultValue = 0) => {
-    return data.map(d => {
-      const value = d[key];
-      return typeof value === 'number' && !isNaN(value) ? value : defaultValue;
-    });
-  };
 
   const temperatureData: ChartData<"line"> = {
     labels,
     datasets: [
       {
         label: "Temperature (°C)",
-        data: prepareChartData(sensorData, 'temperature'),
+        data: sensorData.map((d) => d.temperature),
         borderColor: "rgb(255, 99, 132)",
         backgroundColor: "rgba(255, 99, 132, 0.5)",
       },
@@ -201,7 +131,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
     datasets: [
       {
         label: "Vibration",
-        data: prepareChartData(sensorData, 'vibration'),
+        data: sensorData.map((d) => d.vibration),
         borderColor: "rgb(53, 162, 235)",
         backgroundColor: "rgba(53, 162, 235, 0.5)",
       },
@@ -213,7 +143,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
     datasets: [
       {
         label: "Load (%)",
-        data: prepareChartData(sensorData, 'load'),
+        data: sensorData.map((d) => d.load),
         backgroundColor: "rgba(75, 192, 192, 0.5)",
         borderColor: "rgb(75, 192, 192)",
         borderWidth: 1,
@@ -226,7 +156,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
     datasets: [
       {
         label: "Power Consumption (kW)",
-        data: prepareChartData(sensorData, 'power_consumption'),
+        data: sensorData.map((d) => d.power_consumption),
         borderColor: "rgb(255, 159, 64)",
         backgroundColor: "rgba(255, 159, 64, 0.5)",
       },
@@ -237,25 +167,10 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
     return <div className="text-center p-8">Loading sensor data...</div>
   }
 
-  if (error) {
-    return <div className="text-center p-8 text-red-500">Error: {error}</div>
-  }
-
-  if (sensorData.length === 0) {
-    return <div className="text-center p-8">No sensor data available</div>
-  }
-
   // Helper function to determine if a value is in a warning or critical range
-  const getStatusBadge = (value: number | undefined | null, type: string) => {
-    console.log(`[SensorDataVisualization] getStatusBadge called with:`, { value, type });
-    
-    if (value === undefined || value === null) {
-      console.log(`[SensorDataVisualization] ${type} value is ${value}`);
-      return <Badge variant="secondary">unknown</Badge>
-    }
-
+  const getStatusBadge = (value: number, type: string) => {
     let status = "normal"
-    let variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" = "success"
+    let variant = "success"
 
     if (type === "temperature") {
       if (value > 40) {
@@ -266,19 +181,12 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
         variant = "warning"
       }
     } else if (type === "vibration") {
-      // Vibration thresholds in mm/s
-      if (value >= 7.1) {
+      if (value > 4) {
         status = "critical"
         variant = "destructive"
-      } else if (value >= 4.5) {
+      } else if (value > 3) {
         status = "warning"
         variant = "warning"
-      } else if (value >= 2.8) {
-        status = "normal"
-        variant = "success"
-      } else {
-        status = "good"
-        variant = "success"
       }
     } else if (type === "load") {
       if (value > 70) {
@@ -288,7 +196,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
         status = "warning"
         variant = "warning"
       }
-    } else if (type === "power_consumption") {
+    } else if (type === "power") {
       if (value > 12) {
         status = "critical"
         variant = "destructive"
@@ -298,22 +206,8 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
       }
     }
 
-    return <Badge variant={variant}>{status}</Badge>
+    return <Badge variant={variant as any}>{status}</Badge>
   }
-
-  // Helper function to safely format numeric values
-  const formatNumericValue = (value: any, decimals: number = 1, unit: string = ''): string => {
-    if (value === undefined || value === null) return 'N/A';
-    
-    // Convert to number and validate
-    const numValue = Number(value);
-    if (isNaN(numValue)) {
-      console.error(`[SensorDataVisualization] Invalid numeric value:`, { value, type: typeof value });
-      return 'N/A';
-    }
-    
-    return `${numValue.toFixed(decimals)}${unit}`;
-  };
 
   return (
     <div>
@@ -324,13 +218,11 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium flex justify-between items-center">
                 Temperature
-                {getStatusBadge(Number(currentValues?.temperature), "temperature")}
+                {getStatusBadge(currentValues.temperature, "temperature")}
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">
-                {formatNumericValue(currentValues?.temperature, 1, '°C')}
-              </div>
+              <div className="text-2xl font-bold">{currentValues.temperature.toFixed(1)}°C</div>
             </CardContent>
           </Card>
 
@@ -338,13 +230,11 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium flex justify-between items-center">
                 Vibration
-                {getStatusBadge(Number(currentValues?.vibration), "vibration")}
+                {getStatusBadge(currentValues.vibration, "vibration")}
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">
-                {formatNumericValue(currentValues?.vibration, 1, ' mm/s')}
-              </div>
+              <div className="text-2xl font-bold">{currentValues.vibration.toFixed(2)} mm/s</div>
             </CardContent>
           </Card>
 
@@ -352,27 +242,23 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium flex justify-between items-center">
                 Load
-                {getStatusBadge(Number(currentValues?.load), "load")}
+                {getStatusBadge(currentValues.load, "load")}
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">
-                {formatNumericValue(currentValues?.load, 1, '%')}
-              </div>
+              <div className="text-2xl font-bold">{currentValues.load.toFixed(1)}%</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium flex justify-between items-center">
-                Power Consumption
-                {getStatusBadge(Number(currentValues?.power_consumption), "power_consumption")}
+                Power
+                {getStatusBadge(currentValues.power_consumption, "power")}
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">
-                {formatNumericValue(currentValues?.power_consumption, 2, ' kW')}
-              </div>
+              <div className="text-2xl font-bold">{currentValues.power_consumption.toFixed(2)} kW</div>
             </CardContent>
           </Card>
         </div>

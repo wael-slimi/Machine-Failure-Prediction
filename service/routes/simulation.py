@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
+import time
+from decimal import Decimal
 
 simulation_bp = Blueprint('simulation', __name__)
 
@@ -16,6 +18,71 @@ simulation_state = {
     'current_timestamp': None,
     'is_running': False
 }
+
+def decimal_to_float(obj):
+    """Convert Decimal objects to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+def generate_sensor_data_stream(machine_id):
+    """Generate a stream of sensor data for a specific machine."""
+    while True:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Fetch the latest sensor data for the specified machine
+            query = """
+            SELECT 
+                sd.timestamp,
+                sd.temperature,
+                sd.vibration,
+                sd.load,
+                sd.power_consumption
+            FROM sensor_data sd
+            WHERE sd.machine_id = %s
+            ORDER BY sd.timestamp DESC
+            LIMIT 1
+            """
+            cursor.execute(query, (machine_id,))
+            row = cursor.fetchone()
+
+            if row:
+                # Convert to dictionary
+                columns = [desc[0] for desc in cursor.description]
+                data = dict(zip(columns, row))
+                
+                # Convert datetime to string for JSON serialization
+                if 'timestamp' in data:
+                    data['timestamp'] = data['timestamp'].isoformat()
+                
+                # Yield the data in SSE format
+                yield f"data: {json.dumps(data, default=decimal_to_float)}\n\n"
+            
+            cursor.close()
+            conn.close()
+            
+            # Wait for 5 seconds before next update
+            time.sleep(5)
+            
+        except Exception as e:
+            print(f"Error in sensor data stream: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            time.sleep(5)
+
+@simulation_bp.route('/sensor-stream/<int:machine_id>', methods=['GET'])
+def stream_sensor_data(machine_id):
+    """Stream real-time sensor data for a specific machine."""
+    return Response(
+        generate_sensor_data_stream(machine_id),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 @simulation_bp.route('/data/<int:machine_id>', methods=['GET', 'OPTIONS'])
 def get_sensor_data(machine_id):
@@ -46,11 +113,11 @@ def get_sensor_data(machine_id):
             si.shift,
             si.session_start,
             si.session_end,
-            mt.maintenance_status,
+            mt.maintenance_status_id,
             mt.finished_at - mt.started_at AS maintenance_duration,
             COUNT(hi.interaction_id) AS interaction_count,
             rc.updated_at AS recent_changes,
-            mt.machine_type_id AS machine_type,
+            m.machine_type_id AS machine_type,
             mm.model AS machine_model,
             mp.brand,
             m.installation_date,
@@ -75,8 +142,8 @@ def get_sensor_data(machine_id):
             sd.machine_id, sd.timestamp, sd.temperature, sd.vibration, sd.load,
             sd.cycle_time, sd.power_consumption, ei.humidity, ei.temperature_external,
             ei.power_fluctuation, muh.working_hours, sd.error_code, hi.experience_years,
-            si.shift, si.session_start, si.session_end, mt.maintenance_status,
-            mt.finished_at, mt.started_at, rc.updated_at, mt.machine_type_id,
+            si.shift, si.session_start, si.session_end, mt.maintenance_status_id,
+            mt.finished_at, mt.started_at, rc.updated_at, m.machine_type_id,
             mm.model, mp.brand, m.installation_date, m.working, ei.environment_id,
             si.session_id, hi.interaction_id, mt.maintenance_task_id,
             mt.maintenance_template_id
@@ -177,7 +244,6 @@ def stream_predictions():
                 current_time += timedelta(hours=1)
 
                 # Wait for 1 second before next prediction
-                import time
                 time.sleep(1)
 
         except Exception as e:

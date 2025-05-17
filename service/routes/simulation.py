@@ -6,7 +6,6 @@ import numpy as np
 from datetime import datetime, timedelta
 import json
 import time
-from decimal import Decimal
 
 simulation_bp = Blueprint('simulation', __name__)
 
@@ -18,12 +17,6 @@ simulation_state = {
     'current_timestamp': None,
     'is_running': False
 }
-
-def decimal_to_float(obj):
-    """Convert Decimal objects to float for JSON serialization."""
-    if isinstance(obj, Decimal):
-        return float(obj)
-    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 def generate_sensor_data_stream(machine_id):
     """Generate a stream of sensor data for a specific machine."""
@@ -58,7 +51,7 @@ def generate_sensor_data_stream(machine_id):
                     data['timestamp'] = data['timestamp'].isoformat()
                 
                 # Yield the data in SSE format
-                yield f"data: {json.dumps(data, default=decimal_to_float)}\n\n"
+                yield f"data: {json.dumps(data)}\n\n"
             
             cursor.close()
             conn.close()

@@ -49,7 +49,14 @@ def generate_sensor_data_stream(machine_id):
                 # Convert datetime to string for JSON serialization
                 if 'timestamp' in data:
                     data['timestamp'] = data['timestamp'].isoformat()
-                
+                # Convert Decimal to float for all values
+                for k, v in data.items():
+                    try:
+                        from decimal import Decimal
+                        if isinstance(v, Decimal):
+                            data[k] = float(v)
+                    except ImportError:
+                        pass
                 # Yield the data in SSE format
                 yield f"data: {json.dumps(data)}\n\n"
             

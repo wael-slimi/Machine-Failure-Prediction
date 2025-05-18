@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Line } from "react-chartjs-2"
 import {
   Chart as ChartJS,
@@ -17,13 +17,25 @@ import type { Prediction } from "@/lib/types"
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
-export default function PredictionsTimeline({ machineId }: { machineId: number }) {
+export default function PredictionsTimeline({ machineId, simulationActive }: { machineId: number, simulationActive: boolean }) {
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
+    if (!simulationActive) {
+      // If simulation is not active, close any open stream and clear predictions
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      setPredictions([])
+      return
+    }
+    // Start streaming predictions
     const eventSource = new EventSource("http://localhost:5000/api/simulation/stream")
+    eventSourceRef.current = eventSource
 
     eventSource.onmessage = (event) => {
       try {
@@ -47,8 +59,9 @@ export default function PredictionsTimeline({ machineId }: { machineId: number }
 
     return () => {
       eventSource.close()
+      eventSourceRef.current = null
     }
-  }, [])
+  }, [simulationActive])
 
   const chartData = {
     labels: predictions.map((_, index) => `T-${predictions.length - index}`),

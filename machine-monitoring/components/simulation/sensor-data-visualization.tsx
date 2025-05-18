@@ -21,14 +21,36 @@ import { Badge } from "@/components/ui/badge"
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
-export default function SensorDataVisualization({ machineId }: { machineId: number }) {
+export default function SensorDataVisualization({ machineId, simulationActive, prediction, sensorDataOverride }: { machineId: number, simulationActive: boolean, prediction?: number | null, sensorDataOverride?: any }) {
   const [sensorData, setSensorData] = useState<StreamingSensorData[]>([])
   const [loading, setLoading] = useState(true)
   const [currentValues, setCurrentValues] = useState<StreamingSensorData | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
-  // Setup SSE connection
   useEffect(() => {
+    if (sensorDataOverride) {
+      // If override is provided, show it as the current value and add to chart
+      setCurrentValues(sensorDataOverride)
+      setSensorData((prev) => {
+        const newData = [...prev, sensorDataOverride]
+        if (newData.length > 20) {
+          return newData.slice(newData.length - 20)
+        }
+        return newData
+      })
+      setLoading(false)
+      return
+    }
+    if (!simulationActive) {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      setSensorData([])
+      setCurrentValues(null)
+      setLoading(true)
+      return
+    }
     const eventSource = new EventSource(`http://localhost:5000/api/simulation/sensor-stream/${machineId}`)
     eventSourceRef.current = eventSource
 
@@ -39,7 +61,6 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
           console.error("Error in sensor data stream:", data.error)
           return
         }
-
         const newDataPoint: StreamingSensorData = {
           timestamp: data.timestamp,
           temperature: data.temperature,
@@ -47,7 +68,6 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
           load: data.load,
           power_consumption: data.power_consumption,
         }
-
         setSensorData((prev) => {
           const newData = [...prev, newDataPoint]
           if (newData.length > 20) {
@@ -67,13 +87,12 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
       eventSource.close()
     }
 
-    // Cleanup on unmount
     return () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
       }
     }
-  }, [machineId])
+  }, [machineId, simulationActive, sensorDataOverride])
 
   const chartOptions = {
     responsive: true,
@@ -222,7 +241,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">{currentValues.temperature.toFixed(1)}°C</div>
+              <div className="text-2xl font-bold">{typeof currentValues.temperature === "number" ? currentValues.temperature.toFixed(1) : "-"}°C</div>
             </CardContent>
           </Card>
 
@@ -234,7 +253,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">{currentValues.vibration.toFixed(2)} mm/s</div>
+              <div className="text-2xl font-bold">{typeof currentValues.vibration === "number" ? currentValues.vibration.toFixed(2) : "-"} mm/s</div>
             </CardContent>
           </Card>
 
@@ -246,7 +265,7 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">{currentValues.load.toFixed(1)}%</div>
+              <div className="text-2xl font-bold">{typeof currentValues.load === "number" ? currentValues.load.toFixed(1) : "-"}%</div>
             </CardContent>
           </Card>
 
@@ -258,7 +277,22 @@ export default function SensorDataVisualization({ machineId }: { machineId: numb
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="text-2xl font-bold">{currentValues.power_consumption.toFixed(2)} kW</div>
+              <div className="text-2xl font-bold">{typeof currentValues.power_consumption === "number" ? currentValues.power_consumption.toFixed(2) : "-"} kW</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      {/* Show prediction if provided */}
+      {typeof prediction === "number" && (
+        <div className="mb-4">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium flex justify-between items-center">
+                AI Prediction
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <div className="text-2xl font-bold">{(prediction * 100).toFixed(4)}%</div>
             </CardContent>
           </Card>
         </div>

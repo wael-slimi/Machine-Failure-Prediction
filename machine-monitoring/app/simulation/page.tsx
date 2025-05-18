@@ -10,11 +10,15 @@ import SimulationNotifications from "@/components/simulation/simulation-notifica
 import MachineControls from "@/components/simulation/machine-controls"
 import { Card } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import SimulationSection from "@/components/simulation/simulation-section"
 
 export default function SimulationPage() {
   const [machines, setMachines] = useState<Machine[]>([])
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
   const [loading, setLoading] = useState(true)
+  const [simulationActive, setSimulationActive] = useState(false)
+  const [simPrediction, setSimPrediction] = useState<number | null>(null)
+  const [simSensorData, setSimSensorData] = useState<any>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -85,20 +89,10 @@ export default function SimulationPage() {
         <>
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Real-Time Data Visualization</h2>
-            <SensorDataVisualization machineId={selectedMachine.machine_id} />
+            <SensorDataVisualization machineId={selectedMachine.machine_id} simulationActive={simulationActive} prediction={simPrediction} sensorDataOverride={simSensorData} />
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">AI Predictions</h2>
-              <PredictionsTimeline machineId={selectedMachine.machine_id} />
-            </Card>
-
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Notifications</h2>
-              <SimulationNotifications machineId={selectedMachine.machine_id} />
-            </Card>
-          </div>
+          <SimulationSection simulationActive={simulationActive} setSimulationActive={setSimulationActive} setSimPrediction={setSimPrediction} setSimSensorData={setSimSensorData} />
 
           <Card className="p-6">
             <MachineControls machine={selectedMachine} />

@@ -15,7 +15,7 @@ export default function StatusOverview() {
       try {
         setLoading(true)
         const data = await fetchMachines()
-        setMachines(data)
+        setMachines(data.machines)
       } catch (err) {
         console.error("Failed to load machines for status overview", err)
       } finally {
@@ -27,7 +27,7 @@ export default function StatusOverview() {
   }, [])
 
   const totalMachines = machines.length
-  const activeMachines = machines.filter((m) => m.is_active).length
+  const activeMachines = machines.filter((m) => m.working).length
   // For this demo, we'll assume machines needing maintenance are those with IDs divisible by 3
   const maintenanceMachines = machines.filter((m) => m.machine_id % 3 === 0).length
 

@@ -8,6 +8,8 @@ import logging
 import gc  # Garbage collection
 from tensorflow.keras.callbacks import ModelCheckpoint
 import joblib
+import pickle
+
 
 
 # Configure logging
@@ -135,6 +137,11 @@ def main():
         
         # 7. Save final model
         model.save('model/lstm_maintenance_final.h5')
+
+        # 8 Save training history
+        os.makedirs('ml_model', exist_ok=True)
+        with open('ml_model/training_history.pkl', 'wb') as f:
+            pickle.dump(history.history, f)
         
         logging.info("Training completed successfully")
         

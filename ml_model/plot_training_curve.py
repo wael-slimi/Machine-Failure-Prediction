@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # Load the saved history
 def main():
-    with open('training_history.pkl', 'rb') as f:
+    with open('/home/zven/Projects/PFE/ml_model/training_history.pkl', 'rb') as f:
         history = pickle.load(f)
 
     plt.figure(figsize=(8, 5))

@@ -16,8 +16,6 @@ interface SimulationSectionProps {
 
 export default function SimulationSection({ simulationActive, setSimulationActive, setSimPrediction, setSimSensorData }: SimulationSectionProps) {
   const [intervalMs, setIntervalMs] = useState(1000)
-  const [currentPrediction, setCurrentPrediction] = useState<number | null>(null)
-  const [currentSensorData, setCurrentSensorData] = useState<any>(null)
   const [currentTimestamp, setCurrentTimestamp] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -30,7 +28,6 @@ export default function SimulationSection({ simulationActive, setSimulationActiv
 
   const startSimulation = async () => {
     setSimulationActive(true)
-    // Reset simulation
     await fetch("http://localhost:5000/api/simulation/reset", { method: "POST" })
     intervalRef.current = setInterval(runSimulationStep, intervalMs)
   }
@@ -53,8 +50,6 @@ export default function SimulationSection({ simulationActive, setSimulationActiv
       const data = await response.json()
       setStatus(data.status)
       setCurrentTimestamp(data.timestamp)
-      setCurrentPrediction(data.prediction?.prediction ?? null)
-
       let sensorData = data.sensor_data ?? null
       if (sensorData) {
         sensorData = {
@@ -66,11 +61,8 @@ export default function SimulationSection({ simulationActive, setSimulationActiv
           cycle_time: Number(sensorData.cycle_time),
         }
       }
-
-      setCurrentSensorData(sensorData)
       setSimPrediction(data.prediction?.prediction ?? null)
       setSimSensorData(sensorData)
-      // Show notification if prediction is high (simulate error)
       if (data.prediction?.prediction > 0.8) {
         addGlobalNotification({
           machineId: 5000,
@@ -131,21 +123,6 @@ export default function SimulationSection({ simulationActive, setSimulationActiv
           )}
           {status && (
             <Badge variant={status === "running" ? "default" : "secondary"}>{status}</Badge>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <div>
-            <span className="font-semibold">Prediction:</span>{" "}
-            {currentPrediction !== null ? (
-              <span>{(currentPrediction * 100).toFixed(4)}%</span>
-            ) : (
-              <span className="text-muted-foreground">No prediction yet</span>
-            )}
-          </div>
-          {currentSensorData && (
-            <div className="text-xs text-muted-foreground">
-              <pre>{JSON.stringify(currentSensorData, null, 2)}</pre>
-            </div>
           )}
         </div>
         {/* AI Predictions Timeline */}
